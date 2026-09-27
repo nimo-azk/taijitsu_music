@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>放送予約再生システム (BEEP時報調整版)</title>
+<style>
+* {
+  box-sizing: border-box !important;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  --chassis-bg: #1a1a1a;
+  --panel-bg: #242424;
+  --border-dark: #0f0f0f;
+  --border-light: #3a3a3a;
+  --text-main: #d4d4d4;
+  --text-dim: #777;
+  --led-green: #00ff41;
+  --led-red: #ff3333;
+  --led-amber: #ffaa00;
+  --display-bg: #050505;
+
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  background-color: #000 !important;
+  color: var(--text-main) !important;
+  line-height: 1.5 !important;
+  padding: 24px !important;
+  min-height: 100vh !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 1000px;
+  background: var(--chassis-bg);
+  border-radius: 4px;
+  box-shadow: 0 0 20px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
+  border: 1px solid var(--border-dark);
+  border-top: 1px solid var(--border-light);
+  overflow: hidden;
+  padding: 8px;
+}
+
+.app-header {
+  background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+  padding: 12px 20px;
+  border-bottom: 2px solid var(--border-dark);
+  border-radius: 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.app-header h1 {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em !important;
+  color: #aaa !important;
+  text-transform: uppercase !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.app-header h1::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: var(--led-red);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--led-red);
+}
+
+.grid-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .grid-layout { grid-template-columns: 1fr; }
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-dark);
+  border-top: 1px solid var(--border-light);
+  border-radius: 4px;
+  padding: 16px;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+
+.calib-panel {
+  border-color: #38bdf8 !important;
+  background: #182631 !important;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-dark);
+  padding-bottom: 8px;
+}
+
+.panel-title {
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.lcd-display {
+  background: var(--display-bg);
+  border: 2px solid var(--border-dark);
+  border-bottom-color: var(--border-light);
+  border-right-color: var(--border-light);
+  border-radius: 4px;
+  padding: 12px;
+  font-family: "Courier New", Courier, monospace !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.lcd-display::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.2) 1px, rgba(0,0,0,0.2) 2px);
+  pointer-events: none;
+}
+
+.time-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  color: var(--led-green);
+  text-shadow: 0 0 8px var(--led-green);
+}
+
+.clock-time { font-size: 40px; font-weight: bold; letter-spacing: 2px; }
+.clock-ms { font-size: 16px; font-weight: bold; }
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #1e1e1e;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-dark);
+  margin-top: 12px;
+}
+
+.slider-container label {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+input[type=range] {
+  flex-grow: 1;
+  -webkit-appearance: none;
+  background: #000;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  border: 1px solid #333;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 24px;
+  background: #555;
+  border: 1px solid #777;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+#offsetValue {
+  font-family: "Courier New", Courier, monospace !important;
+  color: var(--led-amber);
+  width: 65px;
+  text-align: right;
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+#offsetValue::-webkit-inner-spin-button, 
+#offsetValue::-webkit-outer-spin-button {
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+.sub-btn-group {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.sub-btn {
+  flex: 1;
+  background: linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #111;
+  border-top: 1px solid #555;
+  color: #aaa;
+  font-size: 10px;
+  padding: 5px 0;
+  border-radius: 2px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.sub-btn:active {
+  background: #111;
+  color: var(--led-amber);
+}
+
+.warp-btn, .net-sync-btn {
+  background: linear-gradient(180deg, #444 0%, #222 100%);
+  border: 1px solid #111;
+  border-top: 1px solid #666;
+  color: #ccc;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.net-sync-btn {
+  background: linear-gradient(180deg, #1d4054 0%, #0f2330 100%);
+  color: #7dd3fc;
+  border-top: 1px solid #38bdf8;
+}
+
+.toggle-btn {
+  background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+  border: 1px solid #0f172a;
+  border-top: 1px solid #64748b;
+  color: #94a3b8;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.toggle-btn.active {
+  background: linear-gradient(180deg, #166534 0%, #14532d 100%);
+  border-top: 1px solid #4ade80;
+  color: #4ade80;
+  text-shadow: 0 0 8px #4ade80;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.time-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #1e1e1e;
+  border: 1px solid var(--border-dark);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.time-box .label {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+input.value {
+  font-size: 24px;
+  font-weight: bold;
+  font-family: "Courier New", Courier, monospace !important;
+  color: var(--led-amber);
+  text-shadow: 0 0 5px var(--led-amber);
+  padding: 4px 0;
+  width: 100%;
+  text-align: center;
+  background: transparent;
+  border: none;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+input.value::-webkit-inner-spin-button, 
+input.value::-webkit-outer-spin-button {
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+.adjust { width: 100%; }
+.adjust button {
+  width: 100%;
+  height: 20px;
+  background: linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 100%);
+  border: 1px solid #111;
+  border-top: 1px solid #555;
+  color: #aaa;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.dropzone {
+  border: 2px dashed #444;
+  background: #1a1a1a;
+  padding: 16px;
+  text-align: center;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #888;
+  font-size: 12px;
+  margin: 12px 0;
+}
+
+.audio-select {
+  width: 100%;
+  height: 40px;
+  margin: 12px 0;
+  padding: 0 10px;
+  background: #111;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: var(--text-main);
+  font-family: "Courier New", Courier, monospace !important;
+  font-size: 12px;
+}
+
+.dropzone.drag { background: #222; border-color: var(--led-amber); color: var(--led-amber); }
+
+.filename {
+  font-size: 12px;
+  color: var(--led-green);
+  text-align: center;
+  background: var(--display-bg);
+  padding: 8px;
+  border: 1px inset #000;
+  font-family: "Courier New", Courier, monospace !important;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.btn {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #111;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  background: linear-gradient(180deg, #2c4c3b 0%, #1a3324 100%);
+  color: #8f8;
+  border-top: 1px solid #4a755d;
+  margin-top: 12px;
+}
+
+.queue-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.queue-item {
+  display: grid;
+  grid-template-columns: 90px 75px 1fr 50px 70px 24px 24px;
+  align-items: center;
+  gap: 8px;
+  background: #111;
+  border: 1px solid var(--border-dark);
+  padding: 8px;
+  border-radius: 4px;
+  font-family: "Courier New", Courier, monospace !important;
+  font-size: 12px;
+  position: relative;
+}
+
+@media (max-width: 600px) {
+  .queue-item {
+    grid-template-columns: auto 1fr auto 28px 28px !important;
+    grid-template-rows: auto auto !important;
+    gap: 8px 6px !important;
+    padding: 10px 8px !important;
+  }
+  
+  .queue-file {
+    grid-column: 1 / 4 !important;
+    grid-row: 1 !important;
+    font-weight: bold;
+  }
+  
+  .queue-status {
+    grid-column: 4 / 6 !important;
+    grid-row: 1 !important;
+    text-align: right !important;
+  }
+  
+  .queue-time-edit {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    width: 82px !important;
+  }
+  
+  .queue-countdown {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    text-align: left !important;
+    font-size: 10px !important;
+  }
+  
+  .vol-slider {
+    grid-column: 3 !important;
+    grid-row: 2 !important;
+    width: 50px !important;
+  }
+  
+  .btn-pause {
+    grid-column: 4 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    height: 28px !important;
+  }
+  
+  .btn-del {
+    grid-column: 5 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    height: 28px !important;
+  }
+}
+
+.queue-time-edit {
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--border-light);
+  color: var(--led-amber);
+  font-family: "Courier New", Courier, monospace !important;
+  font-size: 12px;
+  font-weight: bold;
+  outline: none;
+  padding: 2px 4px;
+  border-radius: 2px;
+  width: 100%;
+}
+
+.queue-time-edit:disabled {
+  color: var(--text-dim);
+  border-color: transparent;
+  background: transparent;
+}
+
+.queue-countdown {
+  color: var(--led-amber);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.queue-file { color: var(--text-main); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.queue-status { text-align: center; font-weight: bold; font-size: 10px; }
+.status-wait { color: var(--text-dim); }
+.status-scheduled { color: var(--led-amber); }
+.status-playing { color: var(--led-green); text-shadow: 0 0 5px var(--led-green); }
+.status-done { color: var(--led-red); }
+.status-paused { color: #fbbf24; text-shadow: 0 0 5px #fbbf24; }
+
+.vol-slider {
+  -webkit-appearance: none;
+  background: #000;
+  height: 4px;
+  border-radius: 2px;
+  border: 1px solid #333;
+  width: 100%;
+}
+
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 16px;
+  background: #555;
+  border: 1px solid #777;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.btn-del {
+  border: 1px solid #111;
+  cursor: pointer;
+  height: 24px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #331a1a;
+  color: #f88;
+}
+
+.btn-pause {
+  border: 1px solid #111;
+  cursor: pointer;
+  height: 24px;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a3344;
+  color: #88ccff;
+}
+
+.btn-pause.active {
+  background: #aa8800;
+  color: #ffff00;
+  border-color: #aa8800;
+}
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="app-header">
+    <h1>MULTIPLE BROADCAST SYSTEM (PRO CLOCK)</h1>
+  </div>
+  <div class="grid-layout">
+    <div class="column">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">MASTER CLOCK</div>
+          <button id="netSyncBtn" class="net-sync-btn">NET SYNC</button>
+        </div>
+        <div class="lcd-display">
+          <div class="time-display">
+            <div id="currentTime" class="clock-time">--:--:--</div>
+            <div id="currentMs" class="clock-ms">000</div>
+          </div>
+        </div>
+        <div id="syncStatus" style="font-size:10px;color:#64748b;text-align:center;margin-top:6px;font-family:'Courier New',monospace;letter-spacing:0.05em;">
+          SYNC: WAITING...
+        </div>
+        <div class="slider-container">
+          <label>OFFSET (MS)</label>
+          <input id="offsetSlider" type="range" min="-60000" max="60000" step="1" value="0">
+          <input type="number" id="offsetValue" value="0" min="-60000" max="60000" step="1">
+        </div>
+        <div class="sub-btn-group">
+          <button class="sub-btn" data-offset-adj="-100">-100</button>
+          <button class="sub-btn" data-offset-adj="-10">-10</button>
+          <button class="sub-btn" data-offset-adj="-1">-1ms</button>
+          <button class="sub-btn" data-offset-adj="0">RESET</button>
+          <button class="sub-btn" data-offset-adj="1">+1ms</button>
+          <button class="sub-btn" data-offset-adj="10">+10</button>
+          <button class="sub-btn" data-offset-adj="100">+100</button>
+        </div>
+      </div>
+
+      <div class="panel calib-panel">
+        <div class="panel-header">
+          <div class="panel-title" style="color: #7dd3fc;">CALIBRATION BEEP</div>
+        </div>
+        <button id="beepToggleBtn" class="toggle-btn">BEEP SOUND: OFF</button>
+        <div style="font-size: 10px; color: #94a3b8; text-align: center; margin-top: 8px;">
+          ONにすると毎秒「ポッ（00秒はピーン）」と鳴ります。<br>外部の時報を聞きながら上の ±1ms / ±10ms ボタンで合わせてください。
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">ADD CUE</div>
+          <button id="warpBtn" class="warp-btn">SYNC NOW</button>
+        </div>
+        <div class="sub-btn-group">
+          <button class="sub-btn" id="nextX0Btn">次の :X0秒</button>
+          <button class="sub-btn" id="next30Btn">次の :30秒</button>
+          <button class="sub-btn" id="next00Btn">次の :00秒</button>
+        </div>
+        <div class="time-grid">
+          <div class="time-box">
+            <div class="adjust"><button data-unit="hour" data-step="1">▲</button></div>
+            <input type="number" id="hour" class="value" min="0" max="23" value="22">
+            <div class="adjust"><button data-unit="hour" data-step="-1">▼</button></div>
+            <div class="label">HOUR</div>
+          </div>
+          <div class="time-box">
+            <div class="adjust"><button data-unit="minute" data-step="1">▲</button></div>
+            <input type="number" id="minute" class="value" min="0" max="59" value="00">
+            <div class="adjust"><button data-unit="minute" data-step="-1">▼</button></div>
+            <div class="label">MIN</div>
+          </div>
+          <div class="time-box">
+            <div class="adjust"><button data-unit="second" data-step="1">▲</button></div>
+            <input type="number" id="second" class="value" min="0" max="59" value="00">
+            <div class="adjust"><button data-unit="second" data-step="-1">▼</button></div>
+            <div class="label">SEC</div>
+          </div>
+        </div>
+        <select id="audioSelect" class="audio-select" aria-label="再生するMP3">
+          <option value="">MP3を読み込み中...</option>
+        </select>
+        <div id="filename" class="filename">NO FILE SELECTED</div>
+        <button id="addQueueBtn" class="btn">ADD TO QUEUE</button>
+      </div>
+    </div>
+    <div class="column">
+      <div class="panel" style="flex-grow: 1;">
+        <div class="panel-header">
+          <div class="panel-title">CUE LIST</div>
+        </div>
+        <div id="queueContainer" class="queue-container"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+class PrecisionVirtualClock {
+  constructor() {
+    this.basePerf = performance.now();
+    this.baseWallTime = Date.now();
+
+    this.manualOffset = 0;
+    this.targetNtpOffset = 0;
+    this.currentNtpOffset = 0;
+    this.smoothingTauMs = 350;
+    this.lastUpdatePerf = this.basePerf;
+
+    this.lastRtt = null;
+    this.lastUncertainty = null;
+    this.syncCount = 0;
+
+    this._loadLastNtpOffset();
+  }
+
+  _loadLastNtpOffset() {
+    try {
+      const saved = localStorage.getItem('beepSystem_lastNtpOffset');
+      const savedAt = localStorage.getItem('beepSystem_lastNtpAt');
+      if (saved !== null && savedAt !== null) {
+        const ageMs = Date.now() - Number(savedAt);
+        if (ageMs >= 0 && ageMs < 2 * 60 * 60 * 1000) {
+          const off = Number(saved) || 0;
+          this.targetNtpOffset = off;
+          this.currentNtpOffset = off;
+        }
+      }
+    } catch (e) {}
+  }
+
+  update() {
+    const nowPerf = performance.now();
+    const dtMs = nowPerf - this.lastUpdatePerf;
+    this.lastUpdatePerf = nowPerf;
+    if (dtMs <= 0) return;
+
+    const diff = this.targetNtpOffset - this.currentNtpOffset;
+    if (Math.abs(diff) > 0.001) {
+      const factor = 1 - Math.exp(-dtMs / this.smoothingTauMs);
+      this.currentNtpOffset += diff * factor;
+    } else {
+      this.currentNtpOffset = this.targetNtpOffset;
+    }
+  }
+
+  recordSync(offsetMs, rttMs) {
+    const jump = Math.abs(offsetMs - this.currentNtpOffset);
+    if (jump > 20 || this.syncCount === 0) {
+      this.currentNtpOffset = offsetMs;
+      this.targetNtpOffset = offsetMs;
+    } else {
+      this.targetNtpOffset = offsetMs;
+    }
+
+    this.lastRtt = rttMs;
+    this.lastUncertainty = Math.max(1, Math.round(rttMs / 2));
+    this.syncCount++;
+  }
+
+  getNow() {
+    const elapsed = performance.now() - this.basePerf;
+    return this.baseWallTime + elapsed + this.currentNtpOffset + this.manualOffset;
+  }
+
+  getDate() {
+    return new Date(this.getNow());
+  }
+
+  setManualOffset(offsetMs) {
+    this.manualOffset = Number(offsetMs) || 0;
+    try {
+      localStorage.setItem('beepSystem_manualOffset', String(this.manualOffset));
+    } catch (e) {}
+  }
+
+  loadManualOffset() {
+    try {
+      const saved = localStorage.getItem('beepSystem_manualOffset');
+      if (saved !== null) {
+        this.manualOffset = Number(saved) || 0;
+      }
+    } catch (e) {}
+    return this.manualOffset;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const clock = new PrecisionVirtualClock();
+  const savedOffset = clock.loadManualOffset();
+
+  const state = {
+    hour: 22, minute: 0, second: 0,
+    file: null, audioBuffer: null,
+    queue: [],
+    beepEnabled: false,
+    lastBeepSecond: -1,
+    isSyncing: false
+  };
+
+  const el = {
+    time: document.getElementById('currentTime'),
+    ms: document.getElementById('currentMs'),
+    hour: document.getElementById('hour'),
+    minute: document.getElementById('minute'),
+    second: document.getElementById('second'),
+    offset: document.getElementById('offsetSlider'),
+    offsetVal: document.getElementById('offsetValue'),
+    audioSelect: document.getElementById('audioSelect'),
+    name: document.getElementById('filename'),
+    addBtn: document.getElementById('addQueueBtn'),
+    queueList: document.getElementById('queueContainer'),
+    warp: document.getElementById('warpBtn'),
+    netSync: document.getElementById('netSyncBtn'),
+    beepBtn: document.getElementById('beepToggleBtn'),
+    syncStatus: document.getElementById('syncStatus')
+  };
+
+  function updateSyncStatus() {
+    if (!el.syncStatus) return;
+    if (clock.lastRtt == null) {
+      el.syncStatus.textContent = 'SYNC: WAITING...';
+      el.syncStatus.style.color = '#64748b';
+      return;
+    }
+    const unc = clock.lastUncertainty != null ? clock.lastUncertainty : '?';
+    const rtt = clock.lastRtt;
+    el.syncStatus.textContent = `SYNC ±${unc}ms  RTT ${rtt}ms  n=${clock.syncCount}`;
+    if (rtt <= 40 && unc <= 15) {
+      el.syncStatus.style.color = '#4ade80';
+    } else if (rtt <= 70) {
+      el.syncStatus.style.color = '#fbbf24';
+    } else {
+      el.syncStatus.style.color = '#f87171';
+    }
+  }
+
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function renderTimeSelectors() {
+    el.hour.value = pad(state.hour);
+    el.minute.value = pad(state.minute);
+    el.second.value = pad(state.second);
+  }
+
+  function playBeep(freq, duration) {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration);
+  }
+
+  function updateClock() {
+    const d = clock.getDate();
+    const sec = d.getSeconds();
+    const ms = d.getMilliseconds();
+    el.time.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(sec)}`;
+    el.ms.textContent = String(ms).padStart(3, '0');
+
+    if (state.lastBeepSecond !== sec) {
+      state.lastBeepSecond = sec;
+      if (state.beepEnabled) {
+        if (sec === 0) {
+          playBeep(1760, 0.2);
+        } else {
+          playBeep(880, 0.05);
+        }
+      }
+      updateSyncStatus();
+    }
+  }
+
+  async function syncNetworkTime(isAutoSync = false) {
+    if (state.isSyncing) return;
+    state.isSyncing = true;
+
+    const sampleCount = 100;
+    if (!isAutoSync) {
+      el.netSync.disabled = true;
+      el.netSync.textContent = `SYNCING (0/${sampleCount})...`;
+    }
+
+    const samples = [];
+    const batchSize = 5;
+
+    for (let i = 0; i < sampleCount; i += batchSize) {
+      if (!isAutoSync) {
+        el.netSync.textContent = `SYNCING (${Math.min(i + batchSize, sampleCount)}/${sampleCount})...`;
+      }
+
+      const batchPromises = [];
+      for (let b = 0; b < batchSize && (i + b) < sampleCount; b++) {
+        const url = 'time.php?_t=' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+        batchPromises.push((async () => {
+          const t0 = performance.now();
+          try {
+            const res = await fetch(url, { cache: 'no-store', priority: 'high', mode: 'cors' });
+            if (!res.ok) return null;
+            const data = await res.json();
+            const t1 = performance.now();
+            const serverMs = data.serverTime;
+            const rtt = t1 - t0;
+            const calculatedServerMs = serverMs + (rtt / 2);
+            const localVirtualTimeAtT1 = clock.baseWallTime + (t1 - clock.basePerf);
+            const offset = calculatedServerMs - localVirtualTimeAtT1;
+            return { offset, rtt };
+          } catch (e) {
+            return null;
+          }
+        })());
+      }
+
+      const batchResults = await Promise.all(batchPromises);
+      batchResults.forEach(r => { if (r) samples.push(r); });
+
+      if (i + batchSize < sampleCount) {
+        await new Promise(r => setTimeout(r, 10)); 
+      }
+    }
+
+    if (samples.length > 0) {
+      samples.sort((a, b) => a.rtt - b.rtt);
+      const topSamples = samples.slice(0, 5);
+      const avgOffset = topSamples.reduce((sum, s) => sum + s.offset, 0) / topSamples.length;
+      const bestRtt = Math.round(topSamples[0].rtt);
+
+      clock.recordSync(avgOffset, bestRtt);
+
+      try {
+        localStorage.setItem('beepSystem_lastNtpOffset', String(avgOffset));
+        localStorage.setItem('beepSystem_lastNtpAt', String(Date.now()));
+      } catch (e) {}
+
+      updateSyncStatus();
+
+      if (!isAutoSync) {
+        const unc = clock.lastUncertainty != null ? clock.lastUncertainty : '?';
+        alert(`【高精度同期 完了】\n有効サンプル: ${samples.length} / ${sampleCount}\n最小RTT: ${bestRtt} ms\n推定残差: ±${unc} ms\n適用補正値: ${Math.round(avgOffset)} ms (上位5件平均)`);
+      }
+    } else if (!isAutoSync) {
+      alert('時刻同期に失敗しました。既存の時計を継続します。');
+    }
+
+    state.isSyncing = false;
+    if (!isAutoSync) {
+      el.netSync.textContent = 'NET SYNC';
+      el.netSync.disabled = false;
+    }
+  }
+
+  el.beepBtn.addEventListener('click', () => {
+    getAudioCtx();
+    state.beepEnabled = !state.beepEnabled;
+    if (state.beepEnabled) {
+      el.beepBtn.classList.add('active');
+      el.beepBtn.textContent = 'BEEP SOUND: ON (PLAYING EVERY SECOND)';
+    } else {
+      el.beepBtn.classList.remove('active');
+      el.beepBtn.textContent = 'BEEP SOUND: OFF';
+    }
+  });
+
+  function updateCountdowns() {
+    const now = clock.getNow();
+    state.queue.forEach((q, index) => {
+      const cdEl = document.getElementById(`countdown-${index}`);
+      if (!cdEl) return;
+      if (q.status === 'paused_wait' || q.status === 'paused_playing') {
+        cdEl.textContent = 'PAUSED';
+      } else if (q.status === 'wait' || q.status === 'scheduled') {
+        const diff = q.targetTime - now;
+        if (diff > 0) {
+          const totalSec = Math.floor(diff / 1000);
+          const h = pad(Math.floor(totalSec / 3600));
+          const m = pad(Math.floor((totalSec % 3600) / 60));
+          const s = pad(totalSec % 60);
+          cdEl.textContent = `-${h}:${m}:${s}`;
+        } else {
+          cdEl.textContent = '00:00:00';
+        }
+      } else {
+        cdEl.textContent = '';
+      }
+    });
+  }
+
+  function renderQueue() {
+    el.queueList.innerHTML = '';
+    state.queue.forEach((q, index) => {
+      const item = document.createElement('div');
+      item.className = 'queue-item';
+      const timeStr = `${pad(q.h)}:${pad(q.m)}:${pad(q.s)}`;
+      let statusClass = 'status-wait', statusText = 'WAIT';
+      if (q.status === 'scheduled') { statusClass = 'status-scheduled'; statusText = 'ARMED'; }
+      else if (q.status === 'playing') { statusClass = 'status-playing'; statusText = 'PLAY'; }
+      else if (q.status === 'done') { statusClass = 'status-done'; statusText = 'DONE'; }
+      else if (q.status === 'paused_wait' || q.status === 'paused_playing') { statusClass = 'status-paused'; statusText = 'PAUSED'; }
+
+      const isEditable = (q.status === 'wait' || q.status === 'scheduled' || q.status === 'paused_wait') ? '' : 'disabled';
+      const pauseIcon = q.isPaused ? '▶' : '⏸';
+      const pauseClass = q.isPaused ? 'active' : '';
+
+      item.innerHTML = `
+        <input type="time" step="1" class="queue-time-edit" value="${timeStr}" data-idx="${index}" title="再生時刻" ${isEditable}>
+        <div class="queue-countdown" id="countdown-${index}"></div>
+        <div class="queue-file" title="${q.fileName}">${q.fileName}</div>
+        <div class="queue-status ${statusClass}">${statusText}</div>
+        <input type="range" class="vol-slider" min="0" max="2" step="0.01" value="${q.vol}" data-idx="${index}" title="Volume">
+        <button class="btn-pause ${pauseClass}" data-idx="${index}" title="Pause/Resume">${pauseIcon}</button>
+        <button class="btn-del" data-idx="${index}" title="Delete">X</button>
+      `;
+      el.queueList.appendChild(item);
+    });
+
+    document.querySelectorAll('.queue-time-edit').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const idx = e.target.dataset.idx;
+        const q = state.queue[idx];
+        if (!e.target.value) return;
+        if (q.sourceNode) {
+          q.sourceNode.onended = null;
+          try { q.sourceNode.stop(); } catch(err){}
+          q.sourceNode = null;
+        }
+        if (q.scheduleTimeout) clearTimeout(q.scheduleTimeout);
+        const parts = e.target.value.split(':');
+        q.h = parseInt(parts[0]) || 0;
+        q.m = parseInt(parts[1]) || 0;
+        q.s = parseInt(parts[2]) || 0;
+        const now = clock.getDate();
+        let t = new Date(now.getTime());
+        t.setHours(q.h, q.m, q.s, 0);
+        if (t <= now) t.setDate(t.getDate() + 1);
+        q.targetTime = t.getTime();
+        q.status = q.isPaused ? 'paused_wait' : 'wait';
+        q.isScheduled = false;
+        state.queue.sort((a, b) => a.targetTime - b.targetTime);
+        renderQueue();
+      });
+    });
+
+    document.querySelectorAll('.vol-slider').forEach(slider => {
+      slider.addEventListener('input', (e) => {
+        const idx = e.target.dataset.idx;
+        const v = Number(e.target.value);
+        state.queue[idx].vol = v;
+        if (state.queue[idx].gainNode) {
+          state.queue[idx].gainNode.gain.value = v;
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-pause').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = e.target.dataset.idx;
+        const q = state.queue[idx];
+        if (q.status === 'done') return;
+
+        if (q.isPaused) {
+          q.isPaused = false;
+          if (q.status === 'paused_playing') {
+            const ctx = getAudioCtx();
+            const source = ctx.createBufferSource();
+            source.buffer = q.buffer;
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = q.vol;
+            source.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            source.start(0, q.elapsedWhenPaused);
+            q.expectedStartTime = ctx.currentTime - q.elapsedWhenPaused;
+            q.sourceNode = source;
+            q.gainNode = gainNode;
+            q.status = 'playing';
+            source.onended = () => {
+              if (q.status === 'playing') {
+                q.status = 'done';
+                renderQueue();
+              }
+            };
+          } else if (q.status === 'paused_wait') {
+            q.status = 'wait';
+            q.isScheduled = false;
+            const now = clock.getDate();
+            let t = new Date(now.getTime());
+            t.setHours(q.h, q.m, q.s, 0);
+            if (t <= now) t.setDate(t.getDate() + 1);
+            q.targetTime = t.getTime();
+          }
+        } else {
+          q.isPaused = true;
+          if (q.status === 'playing') {
+            const ctx = getAudioCtx();
+            q.elapsedWhenPaused = ctx.currentTime - q.expectedStartTime;
+            if (q.sourceNode) {
+              q.sourceNode.onended = null;
+              try { q.sourceNode.stop(); } catch(err){}
+            }
+            q.status = 'paused_playing';
+          } else if (q.status === 'scheduled' || q.status === 'wait') {
+            if (q.sourceNode) {
+              q.sourceNode.onended = null;
+              try { q.sourceNode.stop(); } catch(err){}
+            }
+            if (q.scheduleTimeout) {
+              clearTimeout(q.scheduleTimeout);
+            }
+            q.status = 'paused_wait';
+            q.isScheduled = false;
+          }
+        }
+        renderQueue();
+      });
+    });
+
+    document.querySelectorAll('.btn-del').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = e.target.dataset.idx;
+        const q = state.queue[idx];
+        if (q.sourceNode) {
+          q.sourceNode.onended = null;
+          try { q.sourceNode.stop(); } catch(err){}
+        }
+        if (q.scheduleTimeout) clearTimeout(q.scheduleTimeout);
+        state.queue.splice(idx, 1);
+        renderQueue();
+      });
+    });
+  }
+
+  function scheduleEngine() {
+    const nowMs = clock.getNow();
+    const ctx = getAudioCtx();
+    state.queue.forEach(q => {
+      if (q.status === 'wait' && !q.isScheduled && !q.isPaused) {
+        const diffMs = q.targetTime - nowMs;
+        if (diffMs <= 1000 && diffMs > -500) {
+          q.isScheduled = true;
+          q.status = 'scheduled';
+          const delaySec = Math.max(0, diffMs / 1000);
+          const targetAudioTime = ctx.currentTime + delaySec;
+          q.expectedStartTime = targetAudioTime;
+
+          const source = ctx.createBufferSource();
+          source.buffer = q.buffer;
+          const gainNode = ctx.createGain();
+          gainNode.gain.value = q.vol;
+          source.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          source.start(targetAudioTime);
+          q.sourceNode = source;
+          q.gainNode = gainNode;
+
+          q.scheduleTimeout = setTimeout(() => {
+            if (q.status === 'scheduled') {
+              q.status = 'playing';
+              renderQueue();
+            }
+          }, diffMs);
+
+          source.onended = () => {
+            if (q.status === 'playing') {
+              q.status = 'done';
+              renderQueue();
+            }
+          };
+          renderQueue();
+        }
+      }
+    });
+  }
+
+  async function loadAudioFile(fileName) {
+    if (!fileName) return;
+    el.name.textContent = "LOADING & DECODING...";
+    el.addBtn.disabled = true;
+    try {
+      const ctx = getAudioCtx();
+      const res = await fetch(encodeURI(fileName), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+      state.audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      state.file = { name: fileName };
+      el.name.textContent = fileName;
+    } catch (err) {
+      alert("音声ファイルの読み込みに失敗しました。");
+      state.file = null;
+      state.audioBuffer = null;
+      el.name.textContent = "ERROR";
+    } finally {
+      el.addBtn.disabled = false;
+    }
+  }
+
+  async function loadAudioList() {
+    try {
+      const res = await fetch('time.php?_audioList=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      el.audioSelect.replaceChildren();
+      data.audioFiles.forEach(fileName => {
+        const option = document.createElement('option');
+        option.value = fileName;
+        option.textContent = fileName;
+        el.audioSelect.appendChild(option);
+      });
+      if (data.audioFiles.length > 0) {
+        await loadAudioFile(data.audioFiles[0]);
+      } else {
+        el.audioSelect.innerHTML = '<option value="">MP3が見つかりません</option>';
+        el.name.textContent = "NO MP3 FILE FOUND";
+      }
+    } catch (err) {
+      console.warn("MP3一覧の読み込みに失敗しました:", err);
+      el.audioSelect.innerHTML = '<option value="">MP3一覧を取得できません</option>';
+      el.name.textContent = "ERROR";
+    }
+  }
+
+  function addReservation() {
+    if (!state.file || !state.audioBuffer) return alert('音源を選択（デコード完了）してください');
+    getAudioCtx();
+    const now = clock.getDate();
+    let t = new Date(now.getTime());
+    t.setHours(state.hour, state.minute, state.second, 0);
+    if (t <= now) t.setDate(t.getDate() + 1);
+
+    state.queue.push({
+      fileName: state.file.name,
+      buffer: state.audioBuffer,
+      h: state.hour,
+      m: state.minute,
+      s: state.second,
+      targetTime: t.getTime(),
+      status: 'wait',
+      isScheduled: false,
+      isPaused: false,
+      vol: 1.0,
+      sourceNode: null,
+      gainNode: null,
+      scheduleTimeout: null,
+      expectedStartTime: 0,
+      elapsedWhenPaused: 0
+    });
+
+    state.queue.sort((a, b) => a.targetTime - b.targetTime);
+    renderQueue();
+  }
+
+  // 時刻調整ボタン（▲▼）
+  document.querySelectorAll('.adjust button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const unit = btn.dataset.unit;
+      const step = parseInt(btn.dataset.step);
+      if (unit === 'hour') state.hour = (state.hour + step + 24) % 24;
+      else if (unit === 'minute') state.minute = (state.minute + step + 60) % 60;
+      else if (unit === 'second') state.second = (state.second + step + 60) % 60;
+      renderTimeSelectors();
+    });
+  });
+
+  [el.hour, el.minute, el.second].forEach(input => {
+    input.addEventListener('change', () => {
+      state.hour = Math.min(23, Math.max(0, parseInt(el.hour.value) || 0));
+      state.minute = Math.min(59, Math.max(0, parseInt(el.minute.value) || 0));
+      state.second = Math.min(59, Math.max(0, parseInt(el.second.value) || 0));
+      renderTimeSelectors();
+    });
+  });
+
+  // --- 時刻スナップ処理 ---
+  // 次の :X0秒 (10秒刻みの未来の秒数) にスナップ
+  document.getElementById('nextX0Btn').addEventListener('click', () => {
+    const d = clock.getDate();
+    const currentSec = d.getSeconds();
+    const targetSec = Math.floor(currentSec / 10) * 10 + 10;
+    d.setSeconds(targetSec, 0);
+    state.hour = d.getHours();
+    state.minute = d.getMinutes();
+    state.second = d.getSeconds();
+    renderTimeSelectors();
+  });
+
+  // 次の :30秒 にスナップ
+  document.getElementById('next30Btn').addEventListener('click', () => {
+    const d = clock.getDate();
+    if (d.getSeconds() >= 30) {
+      d.setMinutes(d.getMinutes() + 1);
+    }
+    d.setSeconds(30, 0);
+    state.hour = d.getHours();
+    state.minute = d.getMinutes();
+    state.second = d.getSeconds();
+    renderTimeSelectors();
+  });
+
+  // 次の :00秒 にスナップ
+  document.getElementById('next00Btn').addEventListener('click', () => {
+    const d = clock.getDate();
+    d.setMinutes(d.getMinutes() + 1);
+    d.setSeconds(0, 0);
+    state.hour = d.getHours();
+    state.minute = d.getMinutes();
+    state.second = d.getSeconds();
+    renderTimeSelectors();
+  });
+
+  // SYNC NOW ボタン
+  el.warp.addEventListener('click', () => {
+    const d = clock.getDate();
+    d.setSeconds(d.getSeconds() + 10);
+    state.hour = d.getHours();
+    state.minute = d.getMinutes();
+    state.second = d.getSeconds();
+    renderTimeSelectors();
+  });
+
+  // オフセット値の設定・連動
+  function syncOffsetUI(val) {
+    const num = Number(val) || 0;
+    el.offset.value = num;
+    el.offsetVal.value = num;
+    clock.setManualOffset(num);
+  }
+  syncOffsetUI(savedOffset);
+
+  el.offset.addEventListener('input', (e) => syncOffsetUI(e.target.value));
+  el.offsetVal.addEventListener('change', (e) => syncOffsetUI(e.target.value));
+
+  document.querySelectorAll('[data-offset-adj]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const adj = parseInt(btn.dataset.offsetAdj);
+      const newVal = adj === 0 ? 0 : clock.manualOffset + adj;
+      syncOffsetUI(newVal);
+    });
+  });
+
+  // NET SYNC
+  el.netSync.addEventListener('click', () => syncNetworkTime(false));
+
+  // 同じ階層のMP3から選択
+  el.audioSelect.addEventListener('change', (e) => loadAudioFile(e.target.value));
+
+  // ADD TO QUEUE ボタン
+  el.addBtn.addEventListener('click', addReservation);
+
+  // 初期化時の処理
+  const initialNow = clock.getDate();
+  state.hour = initialNow.getHours();
+  state.minute = initialNow.getMinutes();
+  state.second = initialNow.getSeconds();
+  renderTimeSelectors();
+
+  // 同じ階層のMP3一覧を取得して先頭の音源をロード
+  loadAudioList();
+
+  // メイン周期処理
+  setInterval(() => {
+    clock.update();
+    updateClock();
+    scheduleEngine();
+    updateCountdowns();
+  }, 20);
+});
+</script>
+</body>
+</html>
